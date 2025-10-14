@@ -1,12 +1,13 @@
 {
-    "name": "api-gateway-node",
-    "version": "0.1.0",
-    "scripts": {
-      "start": "node src/index.js",
-      "lint": "npx eslint .",
-      "test": "node -e \"console.log('dummy tests OK')\""
-    },
-    "dependencies": { "express": "^4.19.2" },
-    "devDependencies": { "eslint": "^9.9.0" }
+  "name": "api-gateway-node",
+  "version": "0.1.0",
+  "scripts": {
+    "start": "node src/index.js",
+    "lint": "npx eslint .",
+    "test": "node -e \"console.log('dummy tests OK')\""
+  },
+  "dependencies": { "express": "^4.19.2" },
+  "devDependencies": {
+    "eslint": "^8.57.0"
   }
-  
+}
