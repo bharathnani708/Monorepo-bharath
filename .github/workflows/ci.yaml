@@ -38,10 +38,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '22' }
-      - run: cd apps/api-gateway-node && npm ci
-      - run: cd apps/api-gateway-node && npm run lint
-      - run: cd apps/api-gateway-node && npm test
+        with:
+          node-version: '22'
+          # cache: 'npm'           # (optional) enables cache if you later commit a package-lock.json
+          # cache-dependency-path: apps/api-gateway-node/package-lock.json
+      - name: Install deps
+        working-directory: apps/api-gateway-node
+        run: npm install --no-audit --no-fund
+      - name: Lint
+        working-directory: apps/api-gateway-node
+        run: npm run lint
+      - name: Test
+        working-directory: apps/api-gateway-node
+        run: npm test
       - name: Sonar Scan
         if: env.SONAR_ENABLED == 'true'
         uses: SonarSource/sonarqube-scan-action@v2.3
@@ -58,6 +67,7 @@ jobs:
           docker tag $IMAGE:$TAG $IMAGE:dev
           docker push $IMAGE:$TAG
           docker push $IMAGE:dev
+
 
   pay:
     needs: detect-changes
