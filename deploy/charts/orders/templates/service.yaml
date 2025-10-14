@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Service
+metadata: { name: orders }
+spec:
+  selector: { app: orders }
+  ports: [{ port: 80, targetPort: {{ .Values.service.targetPort }} }]
+  type: ClusterIP

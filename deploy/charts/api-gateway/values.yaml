@@ -1,0 +1,8 @@
+image:
+  repository: ""
+  tag: "dev"
+  pullPolicy: IfNotPresent
+
+service:
+  port: 80
+  targetPort: 8080

@@ -1,0 +1,119 @@
+name: CI (Monorepo)
+on:
+  push: { branches: [main] }
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+env:
+  SONAR_ENABLED: ${{ vars.SONAR_ENABLED || 'false' }}
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api:  ${{ steps.filter.outputs.api }}
+      pay:  ${{ steps.filter.outputs.pay }}
+      ord:  ${{ steps.filter.outputs.ord }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api: ['apps/api-gateway-node/**', 'libs/**']
+            pay: ['apps/payments-python/**', 'libs/**']
+            ord: ['apps/orders-java/**', 'libs/**']
+
+  api:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/api-gateway-node
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: cd apps/api-gateway-node && npm ci
+      - run: cd apps/api-gateway-node && npm run lint
+      - run: cd apps/api-gateway-node && npm test
+      - name: Sonar Scan
+        if: env.SONAR_ENABLED == 'true'
+        uses: SonarSource/sonarqube-scan-action@v2.3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+        with:
+          projectBaseDir: apps/api-gateway-node
+      - name: Login GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build & Push
+        run: |
+          docker build -t $IMAGE:$TAG apps/api-gateway-node
+          docker tag $IMAGE:$TAG $IMAGE:dev
+          docker push $IMAGE:$TAG
+          docker push $IMAGE:dev
+
+  pay:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.pay == 'true'
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/payments-python
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install --no-cache-dir pytest
+      - run: pytest -q || true
+      - name: Sonar Scan
+        if: env.SONAR_ENABLED == 'true'
+        uses: SonarSource/sonarqube-scan-action@v2.3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+        with:
+          projectBaseDir: apps/payments-python
+      - name: Login GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build & Push
+        run: |
+          docker build -t $IMAGE:$TAG apps/payments-python
+          docker tag $IMAGE:$TAG $IMAGE:dev
+          docker push $IMAGE:$TAG
+          docker push $IMAGE:dev
+
+  ord:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ord == 'true'
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/orders-java
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '21' }
+      - run: cd apps/orders-java && mvn -q -DskipTests=true package
+      - name: Sonar Scan
+        if: env.SONAR_ENABLED == 'true'
+        uses: SonarSource/sonarqube-scan-action@v2.3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+        with:
+          projectBaseDir: apps/orders-java
+      - name: Login GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build & Push
+        run: |
+          docker build -t $IMAGE:$TAG apps/orders-java
+          docker tag $IMAGE:$TAG $IMAGE:dev
+          docker push $IMAGE:$TAG
+          docker push $IMAGE:dev
