@@ -16,19 +16,14 @@ env:
 jobs:
   detect-changes:
     runs-on: self-hosted
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TOOL_CACHE:    ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TEMP:          ${{ github.workspace }}/.runner-tmp
-    outputs:
-      api:  ${{ steps.filter.outputs.api }}
-      pay:  ${{ steps.filter.outputs.pay }}
-      ord:  ${{ steps.filter.outputs.ord }}
     steps:
       - uses: actions/checkout@v4
       - name: Prepare runner caches
         run: |
-          mkdir -p "$AGENT_TOOLSDIRECTORY" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
+          echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
+          echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
+          echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -36,22 +31,26 @@ jobs:
             api: ['apps/api-gateway-node/**', 'libs/**']
             pay: ['apps/payments-python/**', 'libs/**']
             ord: ['apps/orders-java/**', 'libs/**']
+    outputs:
+      api:  ${{ steps.filter.outputs.api }}
+      pay:  ${{ steps.filter.outputs.pay }}
+      ord:  ${{ steps.filter.outputs.ord }}
 
   api:
     needs: detect-changes
     if: needs.detect-changes.outputs.api == 'true'
     runs-on: self-hosted
     env:
-      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TOOL_CACHE:    ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TEMP:          ${{ github.workspace }}/.runner-tmp
       IMAGE: ghcr.io/${{ github.repository_owner }}/api-gateway-node
       TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - name: Prepare runner caches
         run: |
-          mkdir -p "$AGENT_TOOLSDIRECTORY" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
+          echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
+          echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
+          echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
 
       - uses: actions/setup-node@v4
         with:
@@ -80,10 +79,12 @@ jobs:
           set -euo pipefail
           SCAN_VER=5.0.1.3006
           URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCAN_VER}-macosx.zip"
-          mkdir -p "$RUNNER_TOOL_CACHE/sonar"
+          DEST="$RUNNER_TOOL_CACHE/sonar"
+          mkdir -p "$DEST"
+          rm -rf "$DEST/sonar-scanner-${SCAN_VER}-macosx" || true
           curl -fsSL "$URL" -o scanner.zip
-          unzip -q scanner.zip -d "$RUNNER_TOOL_CACHE/sonar"
-          echo "$RUNNER_TOOL_CACHE/sonar/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
+          unzip -qo scanner.zip -d "$DEST"
+          echo "$DEST/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
 
       - name: SonarQube Scan (CLI)
         if: env.SONAR_ENABLED == 'true'
@@ -120,19 +121,21 @@ jobs:
     if: needs.detect-changes.outputs.pay == 'true'
     runs-on: self-hosted
     env:
-      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TOOL_CACHE:    ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TEMP:          ${{ github.workspace }}/.runner-tmp
       IMAGE: ghcr.io/${{ github.repository_owner }}/payments-python
       TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - name: Prepare runner caches
         run: |
-          mkdir -p "$AGENT_TOOLSDIRECTORY" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
+          echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
+          echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
+          echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
 
+      # 👇 setup-python now sees the toolcache under the workspace
       - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
+        with:
+          python-version: '3.12'
 
       - run: pip install --no-cache-dir pytest
       - run: pytest -q || true
@@ -148,10 +151,12 @@ jobs:
           set -euo pipefail
           SCAN_VER=5.0.1.3006
           URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCAN_VER}-macosx.zip"
-          mkdir -p "$RUNNER_TOOL_CACHE/sonar"
+          DEST="$RUNNER_TOOL_CACHE/sonar"
+          mkdir -p "$DEST"
+          rm -rf "$DEST/sonar-scanner-${SCAN_VER}-macosx" || true
           curl -fsSL "$URL" -o scanner.zip
-          unzip -q scanner.zip -d "$RUNNER_TOOL_CACHE/sonar"
-          echo "$RUNNER_TOOL_CACHE/sonar/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
+          unzip -qo scanner.zip -d "$DEST"
+          echo "$DEST/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
 
       - name: SonarQube Scan (CLI)
         if: env.SONAR_ENABLED == 'true'
@@ -188,16 +193,16 @@ jobs:
     if: needs.detect-changes.outputs.ord == 'true'
     runs-on: self-hosted
     env:
-      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TOOL_CACHE:    ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TEMP:          ${{ github.workspace }}/.runner-tmp
       IMAGE: ghcr.io/${{ github.repository_owner }}/orders-java
       TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - name: Prepare runner caches
         run: |
-          mkdir -p "$AGENT_TOOLSDIRECTORY" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
+          echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
+          echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
+          echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
 
       - uses: actions/setup-java@v4
         with:
@@ -210,9 +215,11 @@ jobs:
           MAVEN_VERSION=3.9.9
           URL="https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
           curl -fsSL "$URL" -o maven.tgz
-          mkdir -p "$RUNNER_TOOL_CACHE/maven"
-          tar -xzf maven.tgz -C "$RUNNER_TOOL_CACHE/maven"
-          echo "$RUNNER_TOOL_CACHE/maven/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
+          DEST="$RUNNER_TOOL_CACHE/maven"
+          mkdir -p "$DEST"
+          rm -rf "$DEST/apache-maven-${MAVEN_VERSION}" || true
+          tar -xzf maven.tgz -C "$DEST"
+          echo "$DEST/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
 
       - name: Verify Maven
         run: mvn -v
@@ -233,10 +240,12 @@ jobs:
           set -euo pipefail
           SCAN_VER=5.0.1.3006
           URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCAN_VER}-macosx.zip"
-          mkdir -p "$RUNNER_TOOL_CACHE/sonar"
+          DEST="$RUNNER_TOOL_CACHE/sonar"
+          mkdir -p "$DEST"
+          rm -rf "$DEST/sonar-scanner-${SCAN_VER}-macosx" || true
           curl -fsSL "$URL" -o scanner.zip
-          unzip -q scanner.zip -d "$RUNNER_TOOL_CACHE/sonar"
-          echo "$RUNNER_TOOL_CACHE/sonar/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
+          unzip -qo scanner.zip -d "$DEST"
+          echo "$DEST/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
 
       - name: SonarQube Scan (CLI)
         if: env.SONAR_ENABLED == 'true'
