@@ -1,9 +1,12 @@
 name: CodeQL
 
 on:
-  push:        { branches: [ "main" ] }
-  pull_request:{ branches: [ "main" ] }
-  schedule:    [ { cron: "0 1 * * 1" } ]
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: "0 1 * * 1"
 
 permissions:
   actions: read
@@ -24,7 +27,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      # Manual build so Java analysis has compiled classes
+      # Manual build for Java so CodeQL has compiled classes
       - uses: actions/setup-java@v4
         if: matrix.language == 'java'
         with:
@@ -35,6 +38,8 @@ jobs:
         if: matrix.language == 'java'
         run: |
           cd apps/orders-java
+          sudo apt-get update -y
+          sudo apt-get install -y maven
           mvn -q -DskipTests=true package
 
       - uses: github/codeql-action/analyze@v3

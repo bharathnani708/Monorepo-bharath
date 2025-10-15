@@ -11,7 +11,6 @@ permissions:
   security-events: write
 
 env:
-  # Flip to false to skip Sonar in all jobs
   SONAR_ENABLED: ${{ vars.SONAR_ENABLED || 'false' }}
 
 jobs:
@@ -181,15 +180,19 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      # Install Maven on self-hosted (mac/Linux safe)
+      # Install Maven from Apache archive (no 404)
       - name: Install Maven
         run: |
+          set -euo pipefail
           MAVEN_VERSION=3.9.9
-          curl -fsSL https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz -o maven.tgz
+          URL="https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+          echo "Downloading Maven from $URL"
+          curl -fsSL "$URL" -o maven.tgz
           mkdir -p "$RUNNER_TOOL_CACHE/maven"
           tar -xzf maven.tgz
           mv "apache-maven-${MAVEN_VERSION}" "$RUNNER_TOOL_CACHE/maven/"
           echo "$RUNNER_TOOL_CACHE/maven/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
+          mvn -v
 
       - name: Build orders-java
         run: |
