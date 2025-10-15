@@ -69,18 +69,29 @@ jobs:
         working-directory: apps/api-gateway-node
         run: npm test
 
+      # ---------- Sonar (native CLI, not container action) ----------
       - name: Ping SonarQube
         if: env.SONAR_ENABLED == 'true'
         run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
 
-      - name: SonarQube Scan
+      - name: Install Sonar Scanner (macOS)
+        if: env.SONAR_ENABLED == 'true' && !startsWith(runner.os, 'Linux')
+        run: |
+          set -euo pipefail
+          SCAN_VER=5.0.1.3006
+          URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCAN_VER}-macosx.zip"
+          mkdir -p "$RUNNER_TOOL_CACHE/sonar"
+          curl -fsSL "$URL" -o scanner.zip
+          unzip -q scanner.zip -d "$RUNNER_TOOL_CACHE/sonar"
+          echo "$RUNNER_TOOL_CACHE/sonar/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
+
+      - name: SonarQube Scan (CLI)
         if: env.SONAR_ENABLED == 'true'
-        uses: SonarSource/sonarqube-scan-action@v2.3
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-        with:
-          projectBaseDir: apps/api-gateway-node
+        working-directory: apps/api-gateway-node
+        run: |
+          sonar-scanner \
+            -Dsonar.host.url="${{ vars.SONAR_HOST_URL }}" \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
 
       - name: SonarQube Quality Gate
         if: env.SONAR_ENABLED == 'true'
@@ -90,6 +101,7 @@ jobs:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
         with:
           scanMetadataReportFile: apps/api-gateway-node/.scannerwork/report-task.txt
+      # --------------------------------------------------------------
 
       - name: Login GHCR
         if: github.event_name == 'push'
@@ -125,18 +137,29 @@ jobs:
       - run: pip install --no-cache-dir pytest
       - run: pytest -q || true
 
+      # ---------- Sonar ----------
       - name: Ping SonarQube
         if: env.SONAR_ENABLED == 'true'
         run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
 
-      - name: SonarQube Scan
+      - name: Install Sonar Scanner (macOS)
+        if: env.SONAR_ENABLED == 'true' && !startsWith(runner.os, 'Linux')
+        run: |
+          set -euo pipefail
+          SCAN_VER=5.0.1.3006
+          URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCAN_VER}-macosx.zip"
+          mkdir -p "$RUNNER_TOOL_CACHE/sonar"
+          curl -fsSL "$URL" -o scanner.zip
+          unzip -q scanner.zip -d "$RUNNER_TOOL_CACHE/sonar"
+          echo "$RUNNER_TOOL_CACHE/sonar/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
+
+      - name: SonarQube Scan (CLI)
         if: env.SONAR_ENABLED == 'true'
-        uses: SonarSource/sonarqube-scan-action@v2.3
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-        with:
-          projectBaseDir: apps/payments-python
+        working-directory: apps/payments-python
+        run: |
+          sonar-scanner \
+            -Dsonar.host.url="${{ vars.SONAR_HOST_URL }}" \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
 
       - name: SonarQube Quality Gate
         if: env.SONAR_ENABLED == 'true'
@@ -146,6 +169,7 @@ jobs:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
         with:
           scanMetadataReportFile: apps/payments-python/.scannerwork/report-task.txt
+      # ---------------------------
 
       - name: Login GHCR
         if: github.event_name == 'push'
@@ -180,19 +204,16 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      # Install Maven from Apache archive (write PATH for NEXT steps only)
       - name: Install Maven
         run: |
           set -euo pipefail
           MAVEN_VERSION=3.9.9
           URL="https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
-          echo "Downloading Maven from $URL"
           curl -fsSL "$URL" -o maven.tgz
           mkdir -p "$RUNNER_TOOL_CACHE/maven"
           tar -xzf maven.tgz -C "$RUNNER_TOOL_CACHE/maven"
           echo "$RUNNER_TOOL_CACHE/maven/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
 
-      # Now PATH includes Maven (because it's a NEW step)
       - name: Verify Maven
         run: mvn -v
 
@@ -201,18 +222,29 @@ jobs:
           cd apps/orders-java
           mvn -q -DskipTests=true package
 
+      # ---------- Sonar ----------
       - name: Ping SonarQube
         if: env.SONAR_ENABLED == 'true'
         run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
 
-      - name: SonarQube Scan
+      - name: Install Sonar Scanner (macOS)
+        if: env.SONAR_ENABLED == 'true' && !startsWith(runner.os, 'Linux')
+        run: |
+          set -euo pipefail
+          SCAN_VER=5.0.1.3006
+          URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCAN_VER}-macosx.zip"
+          mkdir -p "$RUNNER_TOOL_CACHE/sonar"
+          curl -fsSL "$URL" -o scanner.zip
+          unzip -q scanner.zip -d "$RUNNER_TOOL_CACHE/sonar"
+          echo "$RUNNER_TOOL_CACHE/sonar/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
+
+      - name: SonarQube Scan (CLI)
         if: env.SONAR_ENABLED == 'true'
-        uses: SonarSource/sonarqube-scan-action@v2.3
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-        with:
-          projectBaseDir: apps/orders-java
+        working-directory: apps/orders-java
+        run: |
+          sonar-scanner \
+            -Dsonar.host.url="${{ vars.SONAR_HOST_URL }}" \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
 
       - name: SonarQube Quality Gate
         if: env.SONAR_ENABLED == 'true'
@@ -222,6 +254,7 @@ jobs:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
         with:
           scanMetadataReportFile: apps/orders-java/.scannerwork/report-task.txt
+      # ---------------------------
 
       - name: Login GHCR
         if: github.event_name == 'push'
