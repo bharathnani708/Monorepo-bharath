@@ -11,14 +11,13 @@ permissions:
   security-events: write
 
 env:
-  # flip to false to temporarily skip Sonar in all jobs
+  # Flip to false to skip Sonar in all jobs
   SONAR_ENABLED: ${{ vars.SONAR_ENABLED || 'false' }}
 
 jobs:
   detect-changes:
     runs-on: self-hosted
     env:
-      # tool caches for self-hosted runner (macOS/Linux safe)
       AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
       RUNNER_TOOL_CACHE:    ${{ github.workspace }}/.runner-toolcache
       RUNNER_TEMP:          ${{ github.workspace }}/.runner-tmp
@@ -178,9 +177,24 @@ jobs:
           mkdir -p "$AGENT_TOOLSDIRECTORY" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
 
       - uses: actions/setup-java@v4
-        with: { distribution: 'temurin', java-version: '21' }
+        with:
+          distribution: 'temurin'
+          java-version: '21'
 
-      - run: cd apps/orders-java && mvn -q -DskipTests=true package
+      # Install Maven on self-hosted (mac/Linux safe)
+      - name: Install Maven
+        run: |
+          MAVEN_VERSION=3.9.9
+          curl -fsSL https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz -o maven.tgz
+          mkdir -p "$RUNNER_TOOL_CACHE/maven"
+          tar -xzf maven.tgz
+          mv "apache-maven-${MAVEN_VERSION}" "$RUNNER_TOOL_CACHE/maven/"
+          echo "$RUNNER_TOOL_CACHE/maven/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Build orders-java
+        run: |
+          cd apps/orders-java
+          mvn -q -DskipTests=true package
 
       - name: Ping SonarQube
         if: env.SONAR_ENABLED == 'true'

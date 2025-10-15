@@ -1,14 +1,12 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  schedule:
-    - cron: "0 1 * * 1"
+  push:        { branches: [ "main" ] }
+  pull_request:{ branches: [ "main" ] }
+  schedule:    [ { cron: "0 1 * * 1" } ]
 
 permissions:
+  actions: read
   contents: read
   security-events: write
 
@@ -26,7 +24,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      # Manual build for Java so CodeQL has compiled classes
+      # Manual build so Java analysis has compiled classes
       - uses: actions/setup-java@v4
         if: matrix.language == 'java'
         with:
