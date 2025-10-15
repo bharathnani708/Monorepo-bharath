@@ -1,5 +1,4 @@
 name: CI (Monorepo)
-
 on:
   push: { branches: [main] }
   pull_request: { branches: [main] }
@@ -11,7 +10,6 @@ permissions:
   security-events: write
 
 env:
-  # flip to false to temporarily skip Sonar in all jobs
   SONAR_ENABLED: ${{ vars.SONAR_ENABLED || 'false' }}
 
 jobs:
@@ -36,67 +34,54 @@ jobs:
     if: needs.detect-changes.outputs.api == 'true'
     runs-on: self-hosted
     env:
-      # tool caches for self-hosted runner
-      RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TEMP:       ${{ github.workspace }}/.runner-tmp
       IMAGE: ghcr.io/${{ github.repository_owner }}/api-gateway-node
       TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Prepare runner caches
-        run: |
-          mkdir -p "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Install
+          # cache: 'npm'           # (optional) enables cache if you later commit a package-lock.json
+          # cache-dependency-path: apps/api-gateway-node/package-lock.json
+      - name: Install deps
         working-directory: apps/api-gateway-node
         run: npm install --no-audit --no-fund
-
       - name: Lint
         working-directory: apps/api-gateway-node
         run: npm run lint
-
       - name: Test
         working-directory: apps/api-gateway-node
         run: npm test
-
-      - name: Ping SonarQube
-        if: env.SONAR_ENABLED == 'true'
-        run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
-
-      - name: SonarQube Scan
+      - name: Sonar Scan
         if: env.SONAR_ENABLED == 'true'
         uses: SonarSource/sonarqube-scan-action@v2.3
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          #SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           projectBaseDir: apps/api-gateway-node
 
+      # Wait for Quality Gate (fail job if gate fails)
       - name: SonarQube Quality Gate
-        if: env.SONAR_ENABLED == 'true'
         uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        #with:
+        #  pollingTimeoutSec: 600
         with:
           scanMetadataReportFile: apps/api-gateway-node/.scannerwork/report-task.txt
 
       - name: Login GHCR
-        if: github.event_name == 'push'
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
       - name: Build & Push
-        if: github.event_name == 'push'
         run: |
           docker build -t $IMAGE:$TAG apps/api-gateway-node
           docker tag $IMAGE:$TAG $IMAGE:dev
           docker push $IMAGE:$TAG
           docker push $IMAGE:dev
+
 
   pay:
     needs: detect-changes
@@ -109,45 +94,35 @@ jobs:
       TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Prepare runner caches
         run: |
           mkdir -p "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
 
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-
       - run: pip install --no-cache-dir pytest
       - run: pytest -q || true
-
-      - name: Ping SonarQube
-        if: env.SONAR_ENABLED == 'true'
-        run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
-
-      - name: SonarQube Scan
+      - name: Sonar Scan
         if: env.SONAR_ENABLED == 'true'
         uses: SonarSource/sonarqube-scan-action@v2.3
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           projectBaseDir: apps/payments-python
 
       - name: SonarQube Quality Gate
-        if: env.SONAR_ENABLED == 'true'
         uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           scanMetadataReportFile: apps/payments-python/.scannerwork/report-task.txt
 
+      
       - name: Login GHCR
-        if: github.event_name == 'push'
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
       - name: Build & Push
-        if: github.event_name == 'push'
         run: |
           docker build -t $IMAGE:$TAG apps/payments-python
           docker tag $IMAGE:$TAG $IMAGE:dev
@@ -159,50 +134,34 @@ jobs:
     if: needs.detect-changes.outputs.ord == 'true'
     runs-on: self-hosted
     env:
-      RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TEMP:       ${{ github.workspace }}/.runner-tmp
       IMAGE: ghcr.io/${{ github.repository_owner }}/orders-java
       TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Prepare runner caches
-        run: |
-          mkdir -p "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
-
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '21' }
-
       - run: cd apps/orders-java && mvn -q -DskipTests=true package
-
-      - name: Ping SonarQube
-        if: env.SONAR_ENABLED == 'true'
-        run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
-
-      - name: SonarQube Scan
+      - name: Sonar Scan
         if: env.SONAR_ENABLED == 'true'
         uses: SonarSource/sonarqube-scan-action@v2.3
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           projectBaseDir: apps/orders-java
-
+      
       - name: SonarQube Quality Gate
-        if: env.SONAR_ENABLED == 'true'
         uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           scanMetadataReportFile: apps/orders-java/.scannerwork/report-task.txt
 
-      - name: Login GHCR
-        if: github.event_name == 'push'
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: Login GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Build & Push
-        if: github.event_name == 'push'
         run: |
           docker build -t $IMAGE:$TAG apps/orders-java
           docker tag $IMAGE:$TAG $IMAGE:dev
