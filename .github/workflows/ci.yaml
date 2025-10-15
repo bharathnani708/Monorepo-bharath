@@ -180,7 +180,7 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      # Install Maven from Apache archive (no 404)
+      # Install Maven from Apache archive (write PATH for NEXT steps only)
       - name: Install Maven
         run: |
           set -euo pipefail
@@ -189,10 +189,12 @@ jobs:
           echo "Downloading Maven from $URL"
           curl -fsSL "$URL" -o maven.tgz
           mkdir -p "$RUNNER_TOOL_CACHE/maven"
-          tar -xzf maven.tgz
-          mv "apache-maven-${MAVEN_VERSION}" "$RUNNER_TOOL_CACHE/maven/"
+          tar -xzf maven.tgz -C "$RUNNER_TOOL_CACHE/maven"
           echo "$RUNNER_TOOL_CACHE/maven/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
-          mvn -v
+
+      # Now PATH includes Maven (because it's a NEW step)
+      - name: Verify Maven
+        run: mvn -v
 
       - name: Build orders-java
         run: |
