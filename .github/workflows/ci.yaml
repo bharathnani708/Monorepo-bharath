@@ -17,12 +17,20 @@ env:
 jobs:
   detect-changes:
     runs-on: self-hosted
+    env:
+      # tool caches for self-hosted runner (macOS/Linux safe)
+      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
+      RUNNER_TOOL_CACHE:    ${{ github.workspace }}/.runner-toolcache
+      RUNNER_TEMP:          ${{ github.workspace }}/.runner-tmp
     outputs:
       api:  ${{ steps.filter.outputs.api }}
       pay:  ${{ steps.filter.outputs.pay }}
       ord:  ${{ steps.filter.outputs.ord }}
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare runner caches
+        run: |
+          mkdir -p "$AGENT_TOOLSDIRECTORY" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -36,17 +44,16 @@ jobs:
     if: needs.detect-changes.outputs.api == 'true'
     runs-on: self-hosted
     env:
-      # tool caches for self-hosted runner
-      RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TEMP:       ${{ github.workspace }}/.runner-tmp
+      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
+      RUNNER_TOOL_CACHE:    ${{ github.workspace }}/.runner-toolcache
+      RUNNER_TEMP:          ${{ github.workspace }}/.runner-tmp
       IMAGE: ghcr.io/${{ github.repository_owner }}/api-gateway-node
       TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Prepare runner caches
         run: |
-          mkdir -p "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
+          mkdir -p "$AGENT_TOOLSDIRECTORY" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
 
       - uses: actions/setup-node@v4
         with:
@@ -103,16 +110,16 @@ jobs:
     if: needs.detect-changes.outputs.pay == 'true'
     runs-on: self-hosted
     env:
-      RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TEMP:       ${{ github.workspace }}/.runner-tmp
+      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
+      RUNNER_TOOL_CACHE:    ${{ github.workspace }}/.runner-toolcache
+      RUNNER_TEMP:          ${{ github.workspace }}/.runner-tmp
       IMAGE: ghcr.io/${{ github.repository_owner }}/payments-python
       TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Prepare runner caches
         run: |
-          mkdir -p "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
+          mkdir -p "$AGENT_TOOLSDIRECTORY" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
 
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
@@ -159,16 +166,16 @@ jobs:
     if: needs.detect-changes.outputs.ord == 'true'
     runs-on: self-hosted
     env:
-      RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-toolcache
-      RUNNER_TEMP:       ${{ github.workspace }}/.runner-tmp
+      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
+      RUNNER_TOOL_CACHE:    ${{ github.workspace }}/.runner-toolcache
+      RUNNER_TEMP:          ${{ github.workspace }}/.runner-tmp
       IMAGE: ghcr.io/${{ github.repository_owner }}/orders-java
       TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Prepare runner caches
         run: |
-          mkdir -p "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
+          mkdir -p "$AGENT_TOOLSDIRECTORY" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
 
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '21' }
