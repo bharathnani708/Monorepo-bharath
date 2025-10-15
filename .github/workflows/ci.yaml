@@ -129,22 +129,32 @@ jobs:
       - name: Prepare runner caches
         run: |
           mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
+      
+      - name: Ensure Python 3.12 via Homebrew
+        run: |
+          set -euo pipefail
+          brew list python@3.12 >/dev/null 2>&1 || brew install python@3.12
+          # Put this Python first on PATH
+          echo "$(brew --prefix)/opt/python@3.12/bin" >> "$GITHUB_PATH"
+          python3 -V
+          python3 -m pip install --upgrade pip
+
       #    echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
       #    echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
       #    echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
       #    mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
 
       # 👇 setup-python now sees the toolcache under the workspace
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        env:
-          HOME: ${{ github.workspace }}                                 # <— key line
-          RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-toolcache
-          AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
-          RUNNER_TEMP: ${{ github.workspace }}/.runner-tmp
-        with:
-          python-version: '3.12'
-          check-latest: true
+      #- name: Set up Python
+      #  uses: actions/setup-python@v5
+      #  env:
+      #    HOME: ${{ github.workspace }}                                 # <— key line
+      #    RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-toolcache
+      #    AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
+      #    RUNNER_TEMP: ${{ github.workspace }}/.runner-tmp
+      #  with:
+      #    python-version: '3.12'
+      #    check-latest: true
 
       #- run: pip install --no-cache-dir pytest
       #- run: pytest -q || true
