@@ -68,8 +68,10 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        #with:
+        #  pollingTimeoutSec: 600
         with:
-          pollingTimeoutSec: 600
+          scanMetadataReportFile: apps/api-gateway-node/.scannerwork/report-task.txt
 
       - name: Login GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -109,7 +111,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
-          pollingTimeoutSec: 600
+          scanMetadataReportFile: apps/payments-python/.scannerwork/report-task.txt
 
       
       - name: Login GHCR
@@ -148,7 +150,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
-          pollingTimeoutSec: 600
+          scanMetadataReportFile: apps/orders-java/.scannerwork/report-task.txt
 
 
       - name: Login GHCR

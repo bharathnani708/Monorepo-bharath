@@ -18,29 +18,25 @@ jobs:
     strategy:
       matrix:
         language: [ "javascript", "python", "java" ]
-    steps:
-      - uses: actions/checkout@
-      
 
-      
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-      
+
+      # Manual build for Java so CodeQL has compiled classes
       - uses: actions/setup-java@v4
         if: matrix.language == 'java'
         with:
           distribution: 'temurin'
           java-version: '21'
-      - name: Maven package
+
+      - name: Build orders-java
         if: matrix.language == 'java'
         run: |
           cd apps/orders-java
           mvn -q -DskipTests=true package
 
       - uses: github/codeql-action/analyze@v3
-
-
-
-      #- uses: github/codeql-action/autobuild@v3
-      #- uses: github/codeql-action/analyze@v3
