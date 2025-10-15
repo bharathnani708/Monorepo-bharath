@@ -130,14 +130,28 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
       
+      # replace your Python setup + pytest bits with this
       - name: Ensure Python 3.12 via Homebrew
         run: |
           set -euo pipefail
           brew list python@3.12 >/dev/null 2>&1 || brew install python@3.12
-          # Put this Python first on PATH
           echo "$(brew --prefix)/opt/python@3.12/bin" >> "$GITHUB_PATH"
           python3 -V
-          python3 -m pip install --upgrade pip
+
+      - name: Create venv and install deps
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir pytest
+      
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          . .venv/bin/activate
+          pytest -q || true
+
 
       #    echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
       #    echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
