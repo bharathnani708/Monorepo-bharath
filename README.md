@@ -75,6 +75,35 @@ filters:
    - Self-hosted runner–friendly (macOS/Linux)
    - Extendable for PR checks or CD workflows
 
+---
+
+## 🚀 Next Steps: Continuous Deployment (CD)
+
+While this repository currently implements a full **Continuous Integration (CI)** workflow — including build, test, linting, SonarQube analysis, and container publishing —  
+the next logical step is to extend it into **Continuous Deployment (CD)**.
+
+The `deploy/` directory already contains the foundation for deployment automation.  
+In the upcoming phase, the goal is to:
+- ✅ Use the images published to **GitHub Container Registry (GHCR)** as deployable artifacts.
+- ⚙️ Apply Kubernetes manifests (from the `deploy/` folder) for each microservice.
+- 🧩 Automate environment-specific rollouts (e.g., `dev`, `staging`, `prod`).
+- 🔁 Integrate with **GitHub Actions** for end-to-end CI/CD.
+- 🧠 Optionally include Helm or Kustomize for templating and GitOps compatibility.
+
+A sample CD flow will look like this:
+
+Commit → CI (Build + Test + Sonar) → GHCR → CD (Kubernetes Apply)
+
+Once implemented, each successful CI pipeline will automatically:
+1. Pull the latest image from GHCR.  
+2. Update the deployment manifests with the new image tag.  
+3. Roll out updates to the respective Kubernetes namespace.
+
+---
+
+> 🛠️ *Work in progress:* The `deploy/` folder will soon be enhanced with reusable manifests, secrets management, and environment-specific configurations.
+
+
 🧾 Author & Credits
    - Maintainer: Bharath Nadigoti
    - Tech Stack: Node.js · Python · Java · Docker · GitHub Actions · SonarQube · GHCR
