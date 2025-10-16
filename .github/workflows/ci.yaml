@@ -16,28 +16,72 @@ env:
 jobs:
   detect-changes:
     runs-on: self-hosted
+    outputs:
+      api:  ${{ steps.filter.outputs.api }}
+      pay:  ${{ steps.filter.outputs.pay }}
+      ord:  ${{ steps.filter.outputs.ord }}
+      
+      api_files: ${{ steps.filter.outputs.api_files }}
+      pay_files: ${{ steps.filter.outputs.pay_files }}
+      ord_files: ${{ steps.filter.outputs.ord_files }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout full history (required for reliable diffs)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Prepare runner caches
         run: |
           echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
           echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
           echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
           mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
-      - uses: dorny/paths-filter@v3
+
+      
+      - name: Set explicit base/ref for manual runs
+        id: base
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            git fetch origin main --quiet
+            echo "base=origin/main" >> $GITHUB_OUTPUT
+            echo "ref=${{ github.sha }}" >> $GITHUB_OUTPUT
+          else
+            # let paths-filter use event-provided SHAs
+            echo "base=" >> $GITHUB_OUTPUT
+            echo "ref="  >> $GITHUB_OUTPUT
+          fi
+
+      - name: Filter changed paths
         id: filter
+        uses: dorny/paths-filter@v3
         with:
+          
+          base: ${{ steps.base.outputs.base }}
+          ref:  ${{ steps.base.outputs.ref }}
+         
+          list-files: json
           filters: |
-            api: ['apps/api-gateway-node/**']
-            pay: ['apps/payments-python/**']
-            ord: ['apps/orders-java/**']
-          #  api: ['apps/api-gateway-node/**', 'libs/**']
-          #  pay: ['apps/payments-python/**', 'libs/**']
-          #  ord: ['apps/orders-java/**', 'libs/**']
-    outputs:
-      api:  ${{ steps.filter.outputs.api }}
-      pay:  ${{ steps.filter.outputs.pay }}
-      ord:  ${{ steps.filter.outputs.ord }}
+            api:
+              - 'apps/api-gateway-node/**'
+            pay:
+              - 'apps/payments-python/**'
+            ord:
+              - 'apps/orders-java/**'
+            # If you want a shared trigger, add this and OR it into job conditions:
+            # libs:
+            #   - 'libs/**'
+
+      - name: Debug which filters matched
+        run: |
+          echo "api=${{ steps.filter.outputs.api }}"
+          echo "pay=${{ steps.filter.outputs.pay }}"
+          echo "ord=${{ steps.filter.outputs.ord }}"
+          echo "api_files=${{ steps.filter.outputs.api_files }}"
+          echo "pay_files=${{ steps.filter.outputs.pay_files }}"
+          echo "ord_files=${{ steps.filter.outputs.ord_files }}"
+
+
 
   api:
     needs: detect-changes
