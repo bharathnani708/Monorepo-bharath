@@ -92,7 +92,7 @@ In the upcoming phase, the goal is to:
 
 A sample CD flow will look like this:
 
-Commit → CI (Build + Test + Sonar) → GHCR → CD (Kubernetes Apply)
+**Commit → CI (Build + Test + Sonar) → GHCR → CD (Kubernetes Apply)**
 
 Once implemented, each successful CI pipeline will automatically:
 1. Pull the latest image from GHCR.  
@@ -104,7 +104,7 @@ Once implemented, each successful CI pipeline will automatically:
 > 🛠️ *Work in progress:* The `deploy/` folder will soon be enhanced with reusable manifests, secrets management, and environment-specific configurations.
 
 
-🧾 Author & Credits
+**🧾 Author & Credits**
    - Maintainer: Bharath Nadigoti
    - Tech Stack: Node.js · Python · Java · Docker · GitHub Actions · SonarQube · GHCR
    - Purpose: Demonstration of CI pipelines in a multi-language monorepo with efficient builds and code quality automation.
