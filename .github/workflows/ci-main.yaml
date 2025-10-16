@@ -1,0 +1,359 @@
+name: CI (Monorepo)
+
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+env:
+  SONAR_ENABLED: ${{ vars.SONAR_ENABLED || 'false' }}
+
+jobs:
+  detect-changes:
+    runs-on: self-hosted
+    outputs:
+      api:  ${{ steps.filter.outputs.api }}
+      pay:  ${{ steps.filter.outputs.pay }}
+      ord:  ${{ steps.filter.outputs.ord }}
+      
+      api_files: ${{ steps.filter.outputs.api_files }}
+      pay_files: ${{ steps.filter.outputs.pay_files }}
+      ord_files: ${{ steps.filter.outputs.ord_files }}
+    steps:
+      - name: Checkout full history (required for reliable diffs)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare runner caches
+        run: |
+          echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
+          echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
+          echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
+
+      
+      - name: Set explicit base/ref for manual runs
+        id: base
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            git fetch origin main --quiet
+            echo "base=origin/main" >> $GITHUB_OUTPUT
+            echo "ref=${{ github.sha }}" >> $GITHUB_OUTPUT
+          else
+            # let paths-filter use event-provided SHAs
+            echo "base=" >> $GITHUB_OUTPUT
+            echo "ref="  >> $GITHUB_OUTPUT
+          fi
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          
+          base: ${{ steps.base.outputs.base }}
+          ref:  ${{ steps.base.outputs.ref }}
+         
+          list-files: json
+          filters: |
+            api:
+              - 'apps/api-gateway-node/**'
+            pay:
+              - 'apps/payments-python/**'
+            ord:
+              - 'apps/orders-java/**'
+            # If you want a shared trigger, add this and OR it into job conditions:
+            # libs:
+            #   - 'libs/**'
+
+      - name: Debug which filters matched
+        run: |
+          echo "api=${{ steps.filter.outputs.api }}"
+          echo "pay=${{ steps.filter.outputs.pay }}"
+          echo "ord=${{ steps.filter.outputs.ord }}"
+          echo "api_files=${{ steps.filter.outputs.api_files }}"
+          echo "pay_files=${{ steps.filter.outputs.pay_files }}"
+          echo "ord_files=${{ steps.filter.outputs.ord_files }}"
+
+
+
+  api:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.api == 'true'
+    runs-on: self-hosted
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/api-gateway-node
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare runner caches
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
+          echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
+          echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
+          echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install
+        working-directory: apps/api-gateway-node
+        run: npm install --no-audit --no-fund
+
+      - name: Lint
+        working-directory: apps/api-gateway-node
+        run: npm run lint
+
+      - name: Test
+        working-directory: apps/api-gateway-node
+        run: npm test
+
+      # ---------- Sonar (native CLI, not container action) ----------
+      - name: Ping SonarQube
+        if: env.SONAR_ENABLED == 'true'
+        run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
+
+      - name: Install Sonar Scanner (macOS)
+        if: env.SONAR_ENABLED == 'true' && !startsWith(runner.os, 'Linux')
+        run: |
+          set -euo pipefail
+          SCAN_VER=5.0.1.3006
+          URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCAN_VER}-macosx.zip"
+          DEST="$RUNNER_TOOL_CACHE/sonar"
+          mkdir -p "$DEST"
+          rm -rf "$DEST/sonar-scanner-${SCAN_VER}-macosx" || true
+          curl -fsSL "$URL" -o scanner.zip
+          unzip -qo scanner.zip -d "$DEST"
+          echo "$DEST/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
+
+      - name: SonarQube Scan (CLI)
+        if: env.SONAR_ENABLED == 'true'
+        working-directory: apps/api-gateway-node
+        run: |
+          sonar-scanner \
+            -Dsonar.host.url="${{ vars.SONAR_HOST_URL }}" \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
+
+      - name: SonarQube Quality Gate
+        if: env.SONAR_ENABLED == 'true'
+        uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          scanMetadataReportFile: apps/api-gateway-node/.scannerwork/report-task.txt
+      # --------------------------------------------------------------
+
+      - name: Login GHCR
+        if: github.event_name == 'push'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build & Push
+        if: github.event_name == 'push'
+        run: |
+          docker build -t $IMAGE:$TAG apps/api-gateway-node
+          docker tag $IMAGE:$TAG $IMAGE:dev
+          docker push $IMAGE:$TAG
+          docker push $IMAGE:dev
+
+  pay:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.pay == 'true'
+    runs-on: self-hosted
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/payments-python
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare runner caches
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
+      
+      # replace your Python setup + pytest bits with this
+      - name: Ensure Python 3.12 via Homebrew
+        run: |
+          set -euo pipefail
+          brew list python@3.12 >/dev/null 2>&1 || brew install python@3.12
+          echo "$(brew --prefix)/opt/python@3.12/bin" >> "$GITHUB_PATH"
+          python3 -V
+
+      - name: Create venv and install deps
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir pytest
+      
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          . .venv/bin/activate
+          pytest -q || true
+
+
+      #    echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
+      #    echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
+      #    echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
+      #    mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
+
+      # 👇 setup-python now sees the toolcache under the workspace
+      #- name: Set up Python
+      #  uses: actions/setup-python@v5
+      #  env:
+      #    HOME: ${{ github.workspace }}                                 # <— key line
+      #    RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-toolcache
+      #    AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
+      #    RUNNER_TEMP: ${{ github.workspace }}/.runner-tmp
+      #  with:
+      #    python-version: '3.12'
+      #    check-latest: true
+
+      #- run: pip install --no-cache-dir pytest
+      #- run: pytest -q || true
+
+      # ---------- Sonar ----------
+      - name: Ping SonarQube
+        if: env.SONAR_ENABLED == 'true'
+        run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
+
+      - name: Install Sonar Scanner (macOS)
+        if: env.SONAR_ENABLED == 'true' && !startsWith(runner.os, 'Linux')
+        run: |
+          set -euo pipefail
+          SCAN_VER=5.0.1.3006
+          URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCAN_VER}-macosx.zip"
+          DEST="$RUNNER_TOOL_CACHE/sonar"
+          mkdir -p "$DEST"
+          rm -rf "$DEST/sonar-scanner-${SCAN_VER}-macosx" || true
+          curl -fsSL "$URL" -o scanner.zip
+          unzip -qo scanner.zip -d "$DEST"
+          echo "$DEST/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
+
+      - name: SonarQube Scan (CLI)
+        if: env.SONAR_ENABLED == 'true'
+        working-directory: apps/payments-python
+        run: |
+          sonar-scanner \
+            -Dsonar.host.url="${{ vars.SONAR_HOST_URL }}" \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
+
+      - name: SonarQube Quality Gate
+        if: env.SONAR_ENABLED == 'true'
+        uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          scanMetadataReportFile: apps/payments-python/.scannerwork/report-task.txt
+      # ---------------------------
+
+      - name: Login GHCR
+        if: github.event_name == 'push'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build & Push
+        if: github.event_name == 'push'
+        run: |
+          docker build -t $IMAGE:$TAG apps/payments-python
+          docker tag $IMAGE:$TAG $IMAGE:dev
+          docker push $IMAGE:$TAG
+          docker push $IMAGE:dev
+
+  ord:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ord == 'true'
+    runs-on: self-hosted
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/orders-java
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare runner caches
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
+          echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
+          echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
+          echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install Maven
+        run: |
+          set -euo pipefail
+          MAVEN_VERSION=3.9.9
+          URL="https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+          curl -fsSL "$URL" -o maven.tgz
+          DEST="$RUNNER_TOOL_CACHE/maven"
+          mkdir -p "$DEST"
+          rm -rf "$DEST/apache-maven-${MAVEN_VERSION}" || true
+          tar -xzf maven.tgz -C "$DEST"
+          echo "$DEST/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Maven
+        run: mvn -v
+
+      - name: Build orders-java
+        run: |
+          cd apps/orders-java
+          mvn -q -DskipTests=true package
+
+      # ---------- Sonar ----------
+      - name: Ping SonarQube
+        if: env.SONAR_ENABLED == 'true'
+        run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
+
+      - name: Install Sonar Scanner (macOS)
+        if: env.SONAR_ENABLED == 'true' && !startsWith(runner.os, 'Linux')
+        run: |
+          set -euo pipefail
+          SCAN_VER=5.0.1.3006
+          URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCAN_VER}-macosx.zip"
+          DEST="$RUNNER_TOOL_CACHE/sonar"
+          mkdir -p "$DEST"
+          rm -rf "$DEST/sonar-scanner-${SCAN_VER}-macosx" || true
+          curl -fsSL "$URL" -o scanner.zip
+          unzip -qo scanner.zip -d "$DEST"
+          echo "$DEST/sonar-scanner-${SCAN_VER}-macosx/bin" >> "$GITHUB_PATH"
+
+      - name: SonarQube Scan (CLI)
+        if: env.SONAR_ENABLED == 'true'
+        working-directory: apps/orders-java
+        run: |
+          sonar-scanner \
+            -Dsonar.host.url="${{ vars.SONAR_HOST_URL }}" \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
+
+      - name: SonarQube Quality Gate
+        if: env.SONAR_ENABLED == 'true'
+        uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          scanMetadataReportFile: apps/orders-java/.scannerwork/report-task.txt
+      # ---------------------------
+
+      - name: Login GHCR
+        if: github.event_name == 'push'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build & Push
+        if: github.event_name == 'push'
+        run: |
+          docker build -t $IMAGE:$TAG apps/orders-java
+          docker tag $IMAGE:$TAG $IMAGE:dev
+          docker push $IMAGE:$TAG
+          docker push $IMAGE:dev

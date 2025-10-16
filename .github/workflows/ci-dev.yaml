@@ -1,4 +1,4 @@
-name: CI (Monorepo)
+name: CI (Monorepo) [dev]
 
 on:
   push: { branches: [dev] }
@@ -20,12 +20,8 @@ jobs:
       api:  ${{ steps.filter.outputs.api }}
       pay:  ${{ steps.filter.outputs.pay }}
       ord:  ${{ steps.filter.outputs.ord }}
-      
-      api_files: ${{ steps.filter.outputs.api_files }}
-      pay_files: ${{ steps.filter.outputs.pay_files }}
-      ord_files: ${{ steps.filter.outputs.ord_files }}
     steps:
-      - name: Checkout full history (required for reliable diffs)
+      - name: Checkout full history (reliable diffs)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -37,51 +33,56 @@ jobs:
           echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
           mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
 
-      
-      - name: Set explicit base/ref for manual runs
+      # Robust base/ref for dev (push/PR/manual)
+      - name: Compute diff base/ref
         id: base
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            git fetch origin main --quiet
-            echo "base=origin/main" >> $GITHUB_OUTPUT
-            echo "ref=${{ github.sha }}" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          echo "event_name=${{ github.event_name }}"
+          echo "ref_name=${{ github.ref_name }}"
+          echo "base_ref=${{ github.base_ref }}"
+          echo "before=${{ github.event.before }}"
+          git fetch --all --prune --quiet
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BR="${{ github.base_ref }}"            # e.g. 'dev'
+            git fetch origin "$BR" --quiet
+            BASE="origin/$BR"
+            REF="${{ github.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BEFORE="${{ github.event.before }}"
+            if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+              BASE="$BEFORE"
+            else
+              BR="${{ github.ref_name }}"         # e.g. 'dev'
+              git fetch origin "$BR" --quiet
+              BASE="$(git merge-base "origin/$BR" "${{ github.sha }}")"
+            fi
+            REF="${{ github.sha }}"
           else
-            # let paths-filter use event-provided SHAs
-            echo "base=" >> $GITHUB_OUTPUT
-            echo "ref="  >> $GITHUB_OUTPUT
+            # workflow_dispatch / other
+            BR="${{ github.ref_name }}"           # e.g. 'dev' when manually run from dev
+            git fetch origin "$BR" --quiet
+            BASE="$(git merge-base "origin/$BR" "${{ github.sha }}")"
+            REF="${{ github.sha }}"
           fi
+
+          echo "Computed BASE=$BASE"
+          echo "Computed REF=$REF"
+          echo "base=$BASE" >> $GITHUB_OUTPUT
+          echo "ref=$REF"   >> $GITHUB_OUTPUT
 
       - name: Filter changed paths
         id: filter
         uses: dorny/paths-filter@v3
         with:
-          
           base: ${{ steps.base.outputs.base }}
           ref:  ${{ steps.base.outputs.ref }}
-         
-          list-files: json
           filters: |
-            api:
-              - 'apps/api-gateway-node/**'
-            pay:
-              - 'apps/payments-python/**'
-            ord:
-              - 'apps/orders-java/**'
-            # If you want a shared trigger, add this and OR it into job conditions:
-            # libs:
-            #   - 'libs/**'
-
-      - name: Debug which filters matched
-        run: |
-          echo "api=${{ steps.filter.outputs.api }}"
-          echo "pay=${{ steps.filter.outputs.pay }}"
-          echo "ord=${{ steps.filter.outputs.ord }}"
-          echo "api_files=${{ steps.filter.outputs.api_files }}"
-          echo "pay_files=${{ steps.filter.outputs.pay_files }}"
-          echo "ord_files=${{ steps.filter.outputs.ord_files }}"
-
-
+            api: ['apps/api-gateway-node/**', 'libs/**']
+            pay: ['apps/payments-python/**', 'libs/**']
+            ord: ['apps/orders-java/**', 'libs/**']
 
   api:
     needs: detect-changes
@@ -116,7 +117,6 @@ jobs:
         working-directory: apps/api-gateway-node
         run: npm test
 
-      # ---------- Sonar (native CLI, not container action) ----------
       - name: Ping SonarQube
         if: env.SONAR_ENABLED == 'true'
         run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
@@ -150,7 +150,6 @@ jobs:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
         with:
           scanMetadataReportFile: apps/api-gateway-node/.scannerwork/report-task.txt
-      # --------------------------------------------------------------
 
       - name: Login GHCR
         if: github.event_name == 'push'
@@ -176,8 +175,7 @@ jobs:
       - name: Prepare runner caches
         run: |
           mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
-      
-      # replace your Python setup + pytest bits with this
+
       - name: Ensure Python 3.12 via Homebrew
         run: |
           set -euo pipefail
@@ -192,35 +190,13 @@ jobs:
           . .venv/bin/activate
           python -m pip install --upgrade pip
           pip install --no-cache-dir pytest
-      
+
       - name: Run tests
         run: |
           set -euo pipefail
           . .venv/bin/activate
           pytest -q || true
 
-
-      #    echo "AGENT_TOOLSDIRECTORY=$GITHUB_WORKSPACE/.runner-toolcache" >> $GITHUB_ENV
-      #    echo "RUNNER_TOOL_CACHE=$GITHUB_WORKSPACE/.runner-toolcache"     >> $GITHUB_ENV
-      #    echo "RUNNER_TEMP=$GITHUB_WORKSPACE/.runner-tmp"                 >> $GITHUB_ENV
-      #    mkdir -p "$GITHUB_WORKSPACE/.runner-toolcache" "$GITHUB_WORKSPACE/.runner-tmp"
-
-      # 👇 setup-python now sees the toolcache under the workspace
-      #- name: Set up Python
-      #  uses: actions/setup-python@v5
-      #  env:
-      #    HOME: ${{ github.workspace }}                                 # <— key line
-      #    RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-toolcache
-      #    AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-toolcache
-      #    RUNNER_TEMP: ${{ github.workspace }}/.runner-tmp
-      #  with:
-      #    python-version: '3.12'
-      #    check-latest: true
-
-      #- run: pip install --no-cache-dir pytest
-      #- run: pytest -q || true
-
-      # ---------- Sonar ----------
       - name: Ping SonarQube
         if: env.SONAR_ENABLED == 'true'
         run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
@@ -254,7 +230,6 @@ jobs:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
         with:
           scanMetadataReportFile: apps/payments-python/.scannerwork/report-task.txt
-      # ---------------------------
 
       - name: Login GHCR
         if: github.event_name == 'push'
@@ -310,7 +285,6 @@ jobs:
           cd apps/orders-java
           mvn -q -DskipTests=true package
 
-      # ---------- Sonar ----------
       - name: Ping SonarQube
         if: env.SONAR_ENABLED == 'true'
         run: curl -fsSL -o /dev/null "${{ vars.SONAR_HOST_URL }}/api/server/version"
@@ -344,7 +318,6 @@ jobs:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
         with:
           scanMetadataReportFile: apps/orders-java/.scannerwork/report-task.txt
-      # ---------------------------
 
       - name: Login GHCR
         if: github.event_name == 'push'
