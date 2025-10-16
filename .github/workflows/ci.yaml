@@ -28,9 +28,12 @@ jobs:
         id: filter
         with:
           filters: |
-            api: ['apps/api-gateway-node/**', 'libs/**']
-            pay: ['apps/payments-python/**', 'libs/**']
-            ord: ['apps/orders-java/**', 'libs/**']
+            api: ['apps/api-gateway-node/**']
+            pay: ['apps/payments-python/**']
+            ord: ['apps/orders-java/**']
+          #  api: ['apps/api-gateway-node/**', 'libs/**']
+          #  pay: ['apps/payments-python/**', 'libs/**']
+          #  ord: ['apps/orders-java/**', 'libs/**']
     outputs:
       api:  ${{ steps.filter.outputs.api }}
       pay:  ${{ steps.filter.outputs.pay }}
