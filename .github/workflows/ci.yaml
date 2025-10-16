@@ -1,8 +1,8 @@
 name: CI (Monorepo)
 
 on:
-  push: { branches: [main, test] }
-  pull_request: { branches: [main, test] }
+  push: { branches: [main, test, dev] }
+  pull_request: { branches: [main, test, dev] }
   workflow_dispatch:
 
 permissions:
