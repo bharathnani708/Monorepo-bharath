@@ -68,14 +68,14 @@ filters:
 ```
 
 ## Key Features
-✅ Polyglot Monorepo (Node + Python + Java)
-✅ Smart change detection — builds only what changed
-✅ Full SonarQube integration for code quality
-✅ GHCR integration for container delivery
-✅ Self-hosted runner–friendly (macOS/Linux)
-✅ Extendable for PR checks or CD workflows
+   - Polyglot Monorepo (Node + Python + Java)
+   - Smart change detection — builds only what changed
+   - Full SonarQube integration for code quality
+   - GHCR integration for container delivery
+   - Self-hosted runner–friendly (macOS/Linux)
+   - Extendable for PR checks or CD workflows
 
 🧾 Author & Credits
-Maintainer: Bharath Nadigoti
-Tech Stack: Node.js · Python · Java · Docker · GitHub Actions · SonarQube · GHCR
-Purpose: Demonstration of CI pipelines in a multi-language monorepo with efficient builds and code quality automation.
+   - Maintainer: Bharath Nadigoti
+   - Tech Stack: Node.js · Python · Java · Docker · GitHub Actions · SonarQube · GHCR
+   - Purpose: Demonstration of CI pipelines in a multi-language monorepo with efficient builds and code quality automation.
