@@ -1,4 +1,4 @@
-# Monorepo-bharath
+
 # 🧩 Monorepo CI/CD workflow
 
 This repository is a **multi-service monorepo** containing three independent backend applications — each written in a different language — that are automatically built, tested, analyzed with SonarQube, and containerized through **GitHub Actions CI**.
@@ -65,3 +65,16 @@ filters:
   api: ['apps/api-gateway-node/**', 'libs/**']
   pay: ['apps/payments-python/**', 'libs/**']
   ord: ['apps/orders-java/**', 'libs/**']
+
+🧠 Key Features
+✅ Polyglot Monorepo (Node + Python + Java)
+✅ Smart change detection — builds only what changed
+✅ Full SonarQube integration for code quality
+✅ GHCR integration for container delivery
+✅ Self-hosted runner–friendly (macOS/Linux)
+✅ Extendable for PR checks or CD workflows
+
+🧾 Author & Credits
+Maintainer: Bharath Nadigoti
+Tech Stack: Node.js · Python · Java · Docker · GitHub Actions · SonarQube · GHCR
+Purpose: Demonstration of CI pipelines in a multi-language monorepo with efficient builds and code quality automation.
