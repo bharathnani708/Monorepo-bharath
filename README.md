@@ -65,8 +65,9 @@ filters:
   api: ['apps/api-gateway-node/**', 'libs/**']
   pay: ['apps/payments-python/**', 'libs/**']
   ord: ['apps/orders-java/**', 'libs/**']
+```
 
-🧠 Key Features
+## Key Features
 ✅ Polyglot Monorepo (Node + Python + Java)
 ✅ Smart change detection — builds only what changed
 ✅ Full SonarQube integration for code quality
