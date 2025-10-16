@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   analyse:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       matrix:
         language: [ "javascript", "python", "java" ]
